@@ -39,8 +39,7 @@ stopifnot(all(data_multiplex_aim3$sample %in% data_clinical_aim3$sample))
 
 names(data_multiplex_aim2) <- gsub("pdm H1F-2009", "H1-stem", names(data_multiplex_aim2), fixed=T)
 names(data_multiplex_aim2) <- gsub("seas. H3F", "H3-stem", names(data_multiplex_aim2), fixed=T)
-names(data_multiplex_aim2) <- gsub("Bris H1-2007", "vaxx H1-2007", names(data_multiplex_aim2), fixed=T)
-names(data_multiplex_aim2) <- gsub("Bris H3-2007", "vaxx H3-2007", names(data_multiplex_aim2), fixed=T)
+names(data_multiplex_aim2) <- gsub("seas. H1-2007", "vaxx. H1-2007", names(data_multiplex_aim2), fixed=T)
 
 names(data_multiplex_aim3) <- gsub("pdm H1F-2009", "H1-stem", names(data_multiplex_aim3), fixed=T)
 names(data_multiplex_aim3) <- gsub("seas. H3F", "H3-stem", names(data_multiplex_aim3), fixed=T)
@@ -93,7 +92,6 @@ for (this_aim in all_aims) { # antibody alone
 	data_combined <- bind_cols(data_m,response=as.numeric(data_multiplex$infection))
 	data_combined$response
 	model <- glm(response~., data=data_combined, family="binomial")
-	model %>% stepAIC(trace = FALSE) %>% summary()
 	# summary(model)
 	df_imp <- varImp(model)/max(varImp(model))
 	df_imp <- tibble(variable=rownames(df_imp), importance=df_imp$Overall) %>% arrange(desc(importance))
@@ -110,11 +108,7 @@ for (this_aim in all_aims) { # antibody alone
 	check <- apply(data_new, 1, function(x){any(is.na(x))})
 	data_multiplex_test <- data_multiplex_test[!check,]
 	data_new <- data_new[!check,]
-	# data_new <- apply(data_new, 2, prep, scale="uv") # scale the data, with unit variance
-	if(this_aim=="aim2"){
-		write_csv(as_tibble(data_new), "../results/training_data_aim3.csv")
-		writeLines(as.character(as.numeric(data_multiplex_test$infection)), "../results/response_aim3.txt")
-	}
+
 
 	probabilities <- model %>% predict(as_tibble(data_new), type = "response")
 	test_new <- (probabilities>0.5) == data_multiplex_test$infection
@@ -158,12 +152,8 @@ for (this_aim in all_aims) { # antibody + HAI
 	data_m <- data_m[!check,]
 	# data_m <- apply(data_m, 2, prep, scale="uv") # scale the data, with unit variance
 
-	if(this_aim=="aim2"){
-		write_csv(as_tibble(data_m), "../results/training_data_hai_antibody_aim2.csv")
-		writeLines(as.character(as.numeric(data_multiplex$infection)), "../results/response_aim2.txt")
-	}
-
 	data_combined <- bind_cols(data_m,response=as.numeric(data_multiplex$infection))
+	model <- glm(response~., data=data_combined, family="binomial")
 	# summary(model)
 	df_imp <- varImp(model)/max(varImp(model))
 	df_imp <- tibble(variable=rownames(df_imp), importance=df_imp$Overall) %>% arrange(desc(importance))
@@ -416,11 +406,12 @@ for(this_model in unique(df_imps$model)){
 	df_tmp <- df_imps %>% filter(model %in% this_model)
 	df_tmp <- df_tmp %>% arrange(desc(importance)) %>% filter(row_number()<=10)
 	df_tmp$variable <- factor(df_tmp$variable, levels=df_tmp$variable)
-	p <- ggplot(df_tmp, aes(y=variable))+ geom_col(aes(x=importance, fill=positive_correlation), color="black") + shadowtext::geom_shadowtext(aes(x=importance+0.1, label=p_value_text), bg.color="white", color="black", bg.r=0.1, just="left") +scale_fill_manual("Correlation", values=c("red","blue")) + xlim(c(0, 1.3)) + ggtitle(this_model) + xlab("Importance")+ylab("Variables")+theme_minimal()+theme(legend.position="bottom")
+	# p <- ggplot(df_tmp, aes(y=variable))+ geom_col(aes(x=importance, fill=positive_correlation), color="black") + shadowtext::geom_shadowtext(aes(x=importance+0.1, label=p_value_text), bg.color="white", color="black", bg.r=0.1, just="left", size=2) +scale_fill_manual("Correlation", values=c("red","blue")) + xlim(c(0, 1.3)) + ggtitle(this_model) + xlab("Importance")+ylab("Variables")+theme_minimal()+theme(legend.position="bottom")
+	p <- ggplot(df_tmp, aes(y=variable))+ geom_col(aes(x=importance), fill="grey", color="black") + shadowtext::geom_shadowtext(aes(x=importance+0.1, label=p_value_text), bg.color="white", color="black", bg.r=0.1, just="left", size=2) + xlim(c(0, 1.3)) + ggtitle(this_model) + xlab("Importance")+ylab("Variables")+theme_minimal()+theme(legend.position="bottom")
 	plots <- c(plots, list(p))
 	ggsave(plot=p, paste0("../results/plot_importance_top10_", this_model, ".pdf"), width=5, height=7)
 }
 
 files_all
-p_out <- plots[[2]] + plots[[5]] + plots[[7]] + plot_layout(ncol=1, height=c(8,8,2), guides='collect') &  theme(legend.position='bottom')
-ggsave(plot=p_out, paste0("../results/fig7abc.pdf"), width=8, height=10)
+p_out <- plots[[2]] + plots[[1]] + plots[[5]] + plots[[4]] + plots[[7]] + plot_spacer() + plot_layout(ncol=2, height=c(8,8,2), guides='collect') &  theme(legend.position='bottom')
+ggsave(plot=p_out, paste0("../results/fig7abcde.pdf"), width=10, height=10)

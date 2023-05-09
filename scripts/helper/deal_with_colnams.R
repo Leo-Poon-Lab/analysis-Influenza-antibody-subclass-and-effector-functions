@@ -11,8 +11,8 @@ deal_with_colnames <- function(tibble_i){
 	renamed_t <- gsub(" \\D+/", "-", renamed_t)
 	stopifnot(length(unique(colnames_i))==length(unique(renamed_t)))
 
-	check_1 <- grep("Brisbane", names(renamed_t), fixed=T)
-	renamed_t[check_1] <- paste0("Bris ", renamed_t[check_1])
+	check_1 <- grep("A/Brisbane/10/2007", names(renamed_t), fixed=T)
+	renamed_t[check_1] <- paste0("vaxx ", renamed_t[check_1])
 	check_2 <- grep("A/California/07/2009", names(renamed_t), fixed=T)
 	renamed_t[check_2] <- paste0("pdm ", renamed_t[check_2])
 	check_3 <- grep("chicken", tolower(names(renamed_t)), fixed=T)
@@ -23,7 +23,6 @@ deal_with_colnames <- function(tibble_i){
 	renamed_t[check_4_2] <- paste0("seas. B ", renamed_t[check_4_2])
 	check_5 <- grep(" a/", tolower(names(renamed_t)), fixed=T)
 	check_5 <- check_5[!check_5 %in% c(check_1, check_2, check_3, check_4_1, check_4_2)]
-	# check_5 <- check_5[!check_5 %in% c(check_2, check_3, check_4_1, check_4_2)]
 	renamed_t[check_5] <- paste0("seas. ", renamed_t[check_5])
 	# unique(unlist(tibble_i[1,]))
 	# unique(renamed_t)

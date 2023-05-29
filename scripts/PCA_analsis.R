@@ -168,6 +168,8 @@ for (this_aim in all_aims) { # PCA for raw responses
 			data_m <- data_raw %>% select(-group, -sample, -timepoint) 
 			stopifnot(length(apply(data_m, 2, function(x){which(is.na(x))}))==0) # make sure no missing values
 			data_m <- data_m %>% mutate_all(as.numeric)
+			data_m[data_m<0] <- 0
+			data_m <- log10(data_m+1) # log transformation
 			data_completed <- prep(data_m, scale= "uv") # scale the data, with unit variance
 
 			## PCA

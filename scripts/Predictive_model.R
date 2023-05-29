@@ -49,6 +49,8 @@ names(data_multiplex_aim3) <- gsub("seas. H1-2007", "vaxx. H1-2007", names(data_
 all_aims <- c("aim2", "aim3")
 data_multiplex_aim3 <- data_multiplex_aim3 %>% filter(timepoint==2) # keep only the d2 data for comparison between the aim2 and aim3 data
 
+dir.create("../results/logistic_reg")
+
 for (this_aim in all_aims) { # antibody alone
 	# this_aim="aim2"
 	# this_aim="aim3"
@@ -82,11 +84,13 @@ for (this_aim in all_aims) { # antibody alone
 	check <- apply(data_m, 1, function(x){any(is.na(x))})
 	data_multiplex <- data_multiplex[!check,]
 	data_m <- data_m[!check,]
-	# data_m <- apply(data_m, 2, prep, scale="uv") # scale the data, with unit variance
+	data_m[data_m<0] <- 0
+	data_m <- log10(data_m+1) # log transformation
+	data_m <- apply(data_m, 2, prep, scale="uv") # scale the data, with unit variance
 
 	if(this_aim=="aim2"){
-		write_csv(as_tibble(data_m), "../results/training_data_aim2.csv")
-		writeLines(as.character(as.numeric(data_multiplex$infection)), "../results/response_aim2.txt")
+		write_csv(as_tibble(data_m), "../results/logistic_reg/training_data_aim2.csv")
+		writeLines(as.character(as.numeric(data_multiplex$infection)), "../results/logistic_reg/response_aim2.txt")
 	}
 
 	data_combined <- bind_cols(data_m,response=as.numeric(data_multiplex$infection))
@@ -101,8 +105,8 @@ for (this_aim in all_aims) { # antibody alone
 	test_self <- (probabilities>0.5) == data_combined$response
 	mean(test_self)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_combined$response==1)))
-	writeLines(tmp, paste0("../results/logistic_accuracy_", this_model, ".txt"))
-	write_csv(df_imp, paste0("../results/logistic_imp_", this_model, ".csv"))
+	writeLines(tmp, paste0("../results/logistic_reg/logistic_accuracy_", this_model, ".txt"))
+	write_csv(df_imp, paste0("../results/logistic_reg/logistic_imp_", this_model, ".csv"))
 
 	data_new <- data_multiplex_test %>% dplyr::select(-group,-sample,-timepoint,-infection) %>% mutate_all(as.numeric)
 	check <- apply(data_new, 1, function(x){any(is.na(x))})
@@ -114,7 +118,7 @@ for (this_aim in all_aims) { # antibody alone
 	test_new <- (probabilities>0.5) == data_multiplex_test$infection
 	mean(test_new)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_multiplex_test$infection)))
-	writeLines(tmp, paste0("../results/logistic_prediction_", this_model, ".txt"))
+	writeLines(tmp, paste0("../results/logistic_reg/logistic_prediction_", this_model, ".txt"))
 }
 
 for (this_aim in all_aims) { # antibody + HAI
@@ -146,11 +150,15 @@ for (this_aim in all_aims) { # antibody + HAI
 	
 	stopifnot(all(names(data_multiplex_test)==names(data_multiplex)))
 
-	data_m <- data_multiplex %>% dplyr::select(-group,-sample,-timepoint,-infection) %>% mutate_all(as.numeric)
+	data_m <- data_multiplex %>% dplyr::select(-group,-sample,-timepoint,-infection, -contains("pre_infection_HAI")) %>% mutate_all(as.numeric)
+	
 	check <- apply(data_m, 1, function(x){any(is.na(x))})
 	data_multiplex <- data_multiplex[!check,]
 	data_m <- data_m[!check,]
-	# data_m <- apply(data_m, 2, prep, scale="uv") # scale the data, with unit variance
+	data_m[data_m<0] <- 0
+	data_m <- log10(data_m+1) # log transformation
+	data_m <- apply(data_m, 2, prep, scale="uv") # scale the data, with unit variance
+	data_m <- cbind(data_m, data_multiplex %>% dplyr::select(contains("pre_infection_HAI")))
 
 	data_combined <- bind_cols(data_m,response=as.numeric(data_multiplex$infection))
 	model <- glm(response~., data=data_combined, family="binomial")
@@ -163,8 +171,8 @@ for (this_aim in all_aims) { # antibody + HAI
 	test_self <- (probabilities>0.5) == data_combined$response
 	mean(test_self)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_combined$response==1)))
-	writeLines(tmp, paste0("../results/logistic_accuracy_", this_model, ".txt"))
-	write_csv(df_imp, paste0("../results/logistic_imp_", this_model, ".csv"))
+	writeLines(tmp, paste0("../results/logistic_reg/logistic_accuracy_", this_model, ".txt"))
+	write_csv(df_imp, paste0("../results/logistic_reg/logistic_imp_", this_model, ".csv"))
 
 	data_new <- data_multiplex_test %>% dplyr::select(-group,-sample,-timepoint,-infection) %>% mutate_all(as.numeric)
 	check <- apply(data_new, 1, function(x){any(is.na(x))})
@@ -172,15 +180,15 @@ for (this_aim in all_aims) { # antibody + HAI
 	data_new <- data_new[!check,]
 	# data_new <- apply(data_new, 2, prep, scale="uv") # scale the data, with unit variance
 	if(this_aim=="aim2"){
-		write_csv(as_tibble(data_new), "../results/training_data_hai_antibody_aim3.csv")
-		writeLines(as.character(as.numeric(data_multiplex_test$infection)), "../results/response_aim3.txt")
+		write_csv(as_tibble(data_new), "../results/logistic_reg/training_data_hai_antibody_aim3.csv")
+		writeLines(as.character(as.numeric(data_multiplex_test$infection)), "../results/logistic_reg/response_aim3.txt")
 	}
 
 	probabilities <- model %>% predict(as_tibble(data_new), type = "response")
 	test_new <- (probabilities>0.5) == data_multiplex_test$infection
 	mean(test_new)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_multiplex_test$infection)))
-	writeLines(tmp, paste0("../results/logistic_prediction_", this_model, ".txt"))
+	writeLines(tmp, paste0("../results/logistic_reg/logistic_prediction_", this_model, ".txt"))
 
 }
 
@@ -217,11 +225,10 @@ for (this_aim in all_aims) { # HAI alone
 	check <- apply(data_m, 1, function(x){any(is.na(x))})
 	data_multiplex <- data_multiplex[!check,]
 	data_m <- data_m[!check,]
-	# data_m <- apply(data_m, 2, prep, scale="uv") # scale the data, with unit variance
 
 	if(this_aim=="aim2"){
-		write_csv(as_tibble(data_m), "../results/training_data_hai_only_aim2.csv")
-		writeLines(as.character(as.numeric(data_multiplex$infection)), "../results/response_aim2.txt")
+		write_csv(as_tibble(data_m), "../results/logistic_reg/training_data_hai_only_aim2.csv")
+		writeLines(as.character(as.numeric(data_multiplex$infection)), "../results/logistic_reg/response_aim2.txt")
 	}
 
 	data_combined <- bind_cols(data_m,response=as.numeric(data_multiplex$infection))
@@ -235,8 +242,8 @@ for (this_aim in all_aims) { # HAI alone
 	test_self <- (probabilities>0.5) == data_combined$response
 	mean(test_self)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_combined$response==1)))
-	writeLines(tmp, paste0("../results/logistic_accuracy_", this_model, ".txt"))
-	write_csv(df_imp, paste0("../results/logistic_imp_", this_model, ".csv"))
+	writeLines(tmp, paste0("../results/logistic_reg/logistic_accuracy_", this_model, ".txt"))
+	write_csv(df_imp, paste0("../results/logistic_reg/logistic_imp_", this_model, ".csv"))
 
 	data_new <- data_multiplex_test %>% dplyr::select(-group,-sample,-infection) %>% mutate_all(as.numeric)
 	check <- apply(data_new, 1, function(x){any(is.na(x))})
@@ -244,15 +251,15 @@ for (this_aim in all_aims) { # HAI alone
 	data_new <- data_new[!check,]
 	# data_new <- apply(data_new, 2, prep, scale="uv") # scale the data, with unit variance
 	if(this_aim=="aim2"){
-		write_csv(as_tibble(data_new), "../results/training_hai_only_data_aim3.csv")
-		writeLines(as.character(as.numeric(data_multiplex_test$infection)), "../results/response_aim3.txt")
+		write_csv(as_tibble(data_new), "../results/logistic_reg/training_hai_only_data_aim3.csv")
+		writeLines(as.character(as.numeric(data_multiplex_test$infection)), "../results/logistic_reg/response_aim3.txt")
 	}
 
 	probabilities <- model %>% predict(as_tibble(data_new), type = "response")
 	test_new <- (probabilities>0.5) == data_multiplex_test$infection
 	mean(test_new)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_multiplex_test$infection)))
-	writeLines(tmp, paste0("../results/logistic_prediction_", this_model, ".txt"))
+	writeLines(tmp, paste0("../results/logistic_reg/logistic_prediction_", this_model, ".txt"))
 }
 
 # A feature selected model
@@ -290,7 +297,10 @@ for (this_aim in "aim2") { # antibody alone
 	check <- apply(data_m, 1, function(x){any(is.na(x))})
 	data_multiplex <- data_multiplex[!check,]
 	data_m <- data_m[!check,]
-	
+	data_m[data_m<0] <- 0
+	data_m <- log10(data_m+1) # log transformation
+	data_m <- apply(data_m, 2, prep, scale="uv") # scale the data, with unit variance
+
 	data_combined <- bind_cols(data_m,response=as.numeric(data_multiplex$infection))
 	model_full <- glm(response~., data=data_combined, family="binomial")
 	model <- model_full %>% stepAIC(trace = FALSE)
@@ -303,8 +313,8 @@ for (this_aim in "aim2") { # antibody alone
 	test_self <- (probabilities>0.5) == data_combined$response
 	mean(test_self)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_combined$response==1)))
-	writeLines(tmp, paste0("../results/logistic_accuracy_", this_model, ".txt"))
-	write_csv(df_imp, paste0("../results/logistic_imp_", this_model, ".csv"))
+	writeLines(tmp, paste0("../results/logistic_reg/logistic_accuracy_", this_model, ".txt"))
+	write_csv(df_imp, paste0("../results/logistic_reg/logistic_imp_", this_model, ".csv"))
 
 	data_new <- data_multiplex_test %>% dplyr::select(-group,-sample,-timepoint,-infection) %>% mutate_all(as.numeric)
 	check <- apply(data_new, 1, function(x){any(is.na(x))})
@@ -315,7 +325,7 @@ for (this_aim in "aim2") { # antibody alone
 	test_new <- (probabilities>0.5) == data_multiplex_test$infection
 	mean(test_new)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_multiplex_test$infection)))
-	writeLines(tmp, paste0("../results/logistic_prediction_", this_model, ".txt"))
+	writeLines(tmp, paste0("../results/logistic_reg/logistic_prediction_", this_model, ".txt"))
 }
 
 ## variable selected model 3
@@ -348,11 +358,14 @@ for (this_aim in "aim2") { # antibody + HAI
 	
 	stopifnot(all(names(data_multiplex_test)==names(data_multiplex)))
 
-	data_m <- data_multiplex %>% dplyr::select(-group,-sample,-timepoint,-infection) %>% mutate_all(as.numeric)
+	data_m <- data_multiplex %>% dplyr::select(-group,-sample,-timepoint,-infection, -contains("pre_infection_HAI")) %>% mutate_all(as.numeric)
 	check <- apply(data_m, 1, function(x){any(is.na(x))})
 	data_multiplex <- data_multiplex[!check,]
 	data_m <- data_m[!check,]
-	# data_m <- apply(data_m, 2, prep, scale="uv") # scale the data, with unit variance
+	data_m[data_m<0] <- 0
+	data_m <- log10(data_m+1) # log transformation
+	data_m <- apply(data_m, 2, prep, scale="uv") # scale the data, with unit variance
+	data_m <- cbind(data_m, data_multiplex %>% dplyr::select(contains("pre_infection_HAI")))
 
 	data_combined <- bind_cols(data_m,response=as.numeric(data_multiplex$infection))	
 	model_full <- glm(response~., data=data_combined, family="binomial")
@@ -367,8 +380,8 @@ for (this_aim in "aim2") { # antibody + HAI
 	test_self <- (probabilities>0.5) == data_combined$response
 	mean(test_self)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_combined$response==1)))
-	writeLines(tmp, paste0("../results/logistic_accuracy_", this_model, ".txt"))
-	write_csv(df_imp, paste0("../results/logistic_imp_", this_model, ".csv"))
+	writeLines(tmp, paste0("../results/logistic_reg/logistic_accuracy_", this_model, ".txt"))
+	write_csv(df_imp, paste0("../results/logistic_reg/logistic_imp_", this_model, ".csv"))
 
 	data_new <- data_multiplex_test %>% dplyr::select(-group,-sample,-timepoint,-infection) %>% mutate_all(as.numeric)
 	check <- apply(data_new, 1, function(x){any(is.na(x))})
@@ -380,19 +393,19 @@ for (this_aim in "aim2") { # antibody + HAI
 	test_new <- (probabilities>0.5) == data_multiplex_test$infection
 	mean(test_new)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_multiplex_test$infection)))
-	writeLines(tmp, paste0("../results/logistic_prediction_", this_model, ".txt"))
+	writeLines(tmp, paste0("../results/logistic_reg/logistic_prediction_", this_model, ".txt"))
 
 }
 
 # plot importance
-files_all <- list.files("../results/", "_imp_", full.names=T)
+files_all <- list.files("../results/logistic_reg/", "_imp_", full.names=T)
 df_imps <- lapply(files_all, function(x){
 	tmp <- read_csv(x)
 	tmp$file <- x
 	tmp
 })
 df_imps <- bind_rows(df_imps)
-df_imps$model <- gsub("../results//logistic_imp_", "", df_imps$file, fixed=T)
+df_imps$model <- gsub("../results/logistic_reg//logistic_imp_", "", df_imps$file, fixed=T)
 df_imps$model <- gsub(".csv", "", df_imps$model, fixed=T)
 df_imps$model <- gsub("_", " ", df_imps$model, fixed=T)
 df_imps$positive_correlation <- ifelse(df_imps$coefficients>0, "positive", "negative")
@@ -407,11 +420,11 @@ for(this_model in unique(df_imps$model)){
 	df_tmp <- df_tmp %>% arrange(desc(importance)) %>% filter(row_number()<=10)
 	df_tmp$variable <- factor(df_tmp$variable, levels=df_tmp$variable)
 	# p <- ggplot(df_tmp, aes(y=variable))+ geom_col(aes(x=importance, fill=positive_correlation), color="black") + shadowtext::geom_shadowtext(aes(x=importance+0.1, label=p_value_text), bg.color="white", color="black", bg.r=0.1, just="left", size=2) +scale_fill_manual("Correlation", values=c("red","blue")) + xlim(c(0, 1.3)) + ggtitle(this_model) + xlab("Importance")+ylab("Variables")+theme_minimal()+theme(legend.position="bottom")
-	p <- ggplot(df_tmp, aes(y=variable))+ geom_col(aes(x=importance), fill="grey", color="black") + shadowtext::geom_shadowtext(aes(x=importance+0.1, label=p_value_text), bg.color="white", color="black", bg.r=0.1, just="left", size=2) + xlim(c(0, 1.3)) + ggtitle(this_model) + xlab("Importance")+ylab("Variables")+theme_minimal()+theme(legend.position="bottom")
+	p <- ggplot(df_tmp, aes(y=variable))+ geom_col(aes(x=importance), fill="grey", color="black") + shadowtext::geom_shadowtext(aes(x=importance+0.1, label=p_value_text), bg.color="white", color="black", bg.r=0.1, just="left", size=3) + xlim(c(0, 1.3)) + ggtitle(this_model) + xlab("Importance")+ylab("Variables")+theme_minimal()+theme(legend.position="bottom")
 	plots <- c(plots, list(p))
-	ggsave(plot=p, paste0("../results/plot_importance_top10_", this_model, ".pdf"), width=5, height=7)
+	ggsave(plot=p, paste0("../results/logistic_reg/plot_importance_top10_", this_model, ".pdf"), width=5, height=7)
 }
 
 files_all
 p_out <- plots[[2]] + plots[[1]] + plots[[5]] + plots[[4]] + plots[[7]] + plot_spacer() + plot_layout(ncol=2, height=c(8,8,2), guides='collect') &  theme(legend.position='bottom')
-ggsave(plot=p_out, paste0("../results/fig7abcde.pdf"), width=10, height=10)
+ggsave(plot=p_out, paste0("../results/logistic_reg/fig7abcde.pdf"), width=8, height=8)

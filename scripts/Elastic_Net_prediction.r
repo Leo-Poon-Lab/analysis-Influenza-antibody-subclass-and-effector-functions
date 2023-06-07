@@ -160,9 +160,10 @@ for (this_aim in all_aims) { # antibody + HAI
 	set.seed(2023)
 	model <- plsda(x=data_train, c=factor(data_combined$response, levels=c(0,1), labels=c("non-infection", "infection")), cv=10)
 	summary(model)
-	str(model,1)
 	# plotXScores(model)
-	# plotPredictions(model)
+	plotPredictions(model)
+	# out_file <- paste0(cur_path, "plot_fitting.pdf")
+	# ggsave(out_file, width=6, height=6)
 
 	## score plot
 	model$res$cal$xdecomp$expvar

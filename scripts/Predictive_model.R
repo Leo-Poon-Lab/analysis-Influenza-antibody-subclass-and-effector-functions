@@ -7,53 +7,37 @@ library(readxl)
 library(pcaMethods)
 library(patchwork)
 library(MASS)
-# library(boot)
+library(shadowtext)
 
 # read data
-source("./helper/deal_with_colnams.R")
+source(here::here("scripts/helper/deal_with_colnams.R"))
+source(here::here("scripts/helper/prepare_multiplex_data.R"))
+data_all <- prepare_data()
+data_multiplex_aim2 <- data_all[[1]]
+data_clinical_aim2 <- data_all[[2]]
+data_multiplex_aim3 <- data_all[[3]]
+data_clinical_aim3 <- data_all[[4]]
 
-data_multiplex_aim2 <- read_excel("../data/PCA_data.xlsx", sheet="Aim 2 multiplex data")
-data_multiplex_aim2 <- deal_with_colnames(data_multiplex_aim2)
-unique(sapply(strsplit(names(data_multiplex_aim2), " "), function(x){x[3]}))
-data_multiplex_aim2$timepoint <- 2
-
-data_multiplex_aim3 <- read_excel("../data/PCA_data.xlsx", sheet="Aim 3 multiplex data")
-data_multiplex_aim3 <- deal_with_colnames(data_multiplex_aim3)
-unique(sapply(strsplit(names(data_multiplex_aim3), " "), function(x){paste(x[-c(1,2)], collapse = " ")}))
-names(data_multiplex_aim3) <- gsub("H3N2/Victoria/2011", "H3-2011", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("Malaysia/2004", "HA-20041", names(data_multiplex_aim3), fixed=T)
-
-split_tmp <- strsplit(data_multiplex_aim3$sample, "d", fixed=T)
-data_multiplex_aim3$sample <- sapply(split_tmp, function(x){x[1]})
-data_multiplex_aim3$sample <- gsub(" ", "", data_multiplex_aim3$sample, fixed=T)
-data_multiplex_aim3$group <- gsub(" ", "", data_multiplex_aim3$group, fixed=T)
-data_multiplex_aim3$timepoint <- sapply(split_tmp, function(x){as.numeric(x[2])})
-data_multiplex_aim3$timepoint[data_multiplex_aim3$group=="V0S0"] <- 2
-
-data_clinical_aim2 <- read_excel("../data/PCA_data.xlsx", sheet="Aim 2 clinical data")
+data_multiplex_aim2 <- data_multiplex_aim2 %>% mutate_at(vars(!one_of("group", "sample")), as.numeric)
+data_multiplex_aim3 <- data_multiplex_aim3 %>% mutate_at(vars(!one_of("group", "sample")), as.numeric)
 data_clinical_aim2$sample <- as.character(data_clinical_aim2$sample)
-stopifnot(all(data_multiplex_aim2$sample %in% data_clinical_aim2$sample))
-data_clinical_aim3 <- read_excel("../data/PCA_data.xlsx", sheet="Aim 3 clinical data")
 data_clinical_aim3$sample <- as.character(data_clinical_aim3$sample)
-stopifnot(all(data_multiplex_aim3$sample %in% data_clinical_aim3$sample))
 
-names(data_multiplex_aim2) <- gsub("pdm H1F-2009", "H1-stem", names(data_multiplex_aim2), fixed=T)
-names(data_multiplex_aim2) <- gsub("seas. H3F", "H3-stem", names(data_multiplex_aim2), fixed=T)
-names(data_multiplex_aim2) <- gsub("seas. H1-2007", "vaxx. H1-2007", names(data_multiplex_aim2), fixed=T)
-
-names(data_multiplex_aim3) <- gsub("pdm H1F-2009", "H1-stem", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("seas. H3F", "H3-stem", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("seas. H1-2007", "vaxx. H1-2007", names(data_multiplex_aim3), fixed=T)
+# convert the column names to be the same between aim2 and aim3 data in this analysis
+names(data_multiplex_aim2) <- gsub(" sH1", " vaxx sH1-2007", names(data_multiplex_aim2), fixed=T)
+names(data_multiplex_aim2) <- gsub(" pH1", " pH1-2009", names(data_multiplex_aim2), fixed=T)
+names(data_multiplex_aim2) <- gsub(" H3-2007", " sH3-2007", names(data_multiplex_aim2), fixed=T)
 
 # build model for aim2 and aim3
 all_aims <- c("aim2", "aim3")
 data_multiplex_aim3 <- data_multiplex_aim3 %>% filter(timepoint==2) # keep only the d2 data for comparison between the aim2 and aim3 data
 
-dir.create("../results/logistic_reg")
+dir.create(here::here("results/logistic_reg"))
 
 for (this_aim in all_aims) { # antibody alone
 	# this_aim="aim2"
 	# this_aim="aim3"
+  out_path <- here::here("results/logistic_reg/")
 	if(this_aim=="aim2"){ 
 		data_multiplex <- data_multiplex_aim2
 		data_multiplex_test <- data_multiplex_aim3
@@ -89,8 +73,8 @@ for (this_aim in all_aims) { # antibody alone
 	data_m <- apply(data_m, 2, prep, scale="uv") # scale the data, with unit variance
 
 	if(this_aim=="aim2"){
-		write_csv(as_tibble(data_m), "../results/logistic_reg/training_data_aim2.csv")
-		writeLines(as.character(as.numeric(data_multiplex$infection)), "../results/logistic_reg/response_aim2.txt")
+		write_csv(as_tibble(data_m), here::here("results/logistic_reg/training_data_aim2.csv"))
+		writeLines(as.character(as.numeric(data_multiplex$infection)), paste0(out_path, "response_aim2.txt"))
 	}
 
 	data_combined <- bind_cols(data_m,response=as.numeric(data_multiplex$infection))
@@ -105,8 +89,8 @@ for (this_aim in all_aims) { # antibody alone
 	test_self <- (probabilities>0.5) == data_combined$response
 	mean(test_self)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_combined$response==1)))
-	writeLines(tmp, paste0("../results/logistic_reg/logistic_accuracy_", this_model, ".txt"))
-	write_csv(df_imp, paste0("../results/logistic_reg/logistic_imp_", this_model, ".csv"))
+	writeLines(tmp, paste0(out_path, "logistic_accuracy_", this_model, ".txt"))
+	write_csv(df_imp, paste0(out_path, "logistic_imp_", this_model, ".csv"))
 
 	data_new <- data_multiplex_test %>% dplyr::select(-group,-sample,-timepoint,-infection) %>% mutate_all(as.numeric)
 	check <- apply(data_new, 1, function(x){any(is.na(x))})
@@ -118,7 +102,7 @@ for (this_aim in all_aims) { # antibody alone
 	test_new <- (probabilities>0.5) == data_multiplex_test$infection
 	mean(test_new)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_multiplex_test$infection)))
-	writeLines(tmp, paste0("../results/logistic_reg/logistic_prediction_", this_model, ".txt"))
+	writeLines(tmp, paste0(out_path, "logistic_prediction_", this_model, ".txt"))
 }
 
 for (this_aim in all_aims) { # antibody + HAI
@@ -171,8 +155,8 @@ for (this_aim in all_aims) { # antibody + HAI
 	test_self <- (probabilities>0.5) == data_combined$response
 	mean(test_self)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_combined$response==1)))
-	writeLines(tmp, paste0("../results/logistic_reg/logistic_accuracy_", this_model, ".txt"))
-	write_csv(df_imp, paste0("../results/logistic_reg/logistic_imp_", this_model, ".csv"))
+	writeLines(tmp, paste0(out_path, "logistic_accuracy_", this_model, ".txt"))
+	write_csv(df_imp, paste0(out_path, "logistic_imp_", this_model, ".csv"))
 
 	data_new <- data_multiplex_test %>% dplyr::select(-group,-sample,-timepoint,-infection) %>% mutate_all(as.numeric)
 	check <- apply(data_new, 1, function(x){any(is.na(x))})
@@ -180,15 +164,15 @@ for (this_aim in all_aims) { # antibody + HAI
 	data_new <- data_new[!check,]
 	# data_new <- apply(data_new, 2, prep, scale="uv") # scale the data, with unit variance
 	if(this_aim=="aim2"){
-		write_csv(as_tibble(data_new), "../results/logistic_reg/training_data_hai_antibody_aim3.csv")
-		writeLines(as.character(as.numeric(data_multiplex_test$infection)), "../results/logistic_reg/response_aim3.txt")
+		write_csv(as_tibble(data_new), paste0(out_path, "training_data_hai_antibody_aim3.csv"))
+		writeLines(as.character(as.numeric(data_multiplex_test$infection)), paste0(out_path, "response_aim3.txt"))
 	}
 
 	probabilities <- model %>% predict(as_tibble(data_new), type = "response")
 	test_new <- (probabilities>0.5) == data_multiplex_test$infection
 	mean(test_new)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_multiplex_test$infection)))
-	writeLines(tmp, paste0("../results/logistic_reg/logistic_prediction_", this_model, ".txt"))
+	writeLines(tmp, paste0(out_path, "logistic_prediction_", this_model, ".txt"))
 
 }
 
@@ -227,8 +211,8 @@ for (this_aim in all_aims) { # HAI alone
 	data_m <- data_m[!check,]
 
 	if(this_aim=="aim2"){
-		write_csv(as_tibble(data_m), "../results/logistic_reg/training_data_hai_only_aim2.csv")
-		writeLines(as.character(as.numeric(data_multiplex$infection)), "../results/logistic_reg/response_aim2.txt")
+		write_csv(as_tibble(data_m), paste0(out_path, "training_data_hai_only_aim2.csv"))
+		writeLines(as.character(as.numeric(data_multiplex$infection)), paste0(out_path, "response_aim2.txt"))
 	}
 
 	data_combined <- bind_cols(data_m,response=as.numeric(data_multiplex$infection))
@@ -242,8 +226,8 @@ for (this_aim in all_aims) { # HAI alone
 	test_self <- (probabilities>0.5) == data_combined$response
 	mean(test_self)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_combined$response==1)))
-	writeLines(tmp, paste0("../results/logistic_reg/logistic_accuracy_", this_model, ".txt"))
-	write_csv(df_imp, paste0("../results/logistic_reg/logistic_imp_", this_model, ".csv"))
+	writeLines(tmp, paste0(out_path, "logistic_accuracy_", this_model, ".txt"))
+	write_csv(df_imp, paste0(out_path, "logistic_imp_", this_model, ".csv"))
 
 	data_new <- data_multiplex_test %>% dplyr::select(-group,-sample,-infection) %>% mutate_all(as.numeric)
 	check <- apply(data_new, 1, function(x){any(is.na(x))})
@@ -251,18 +235,18 @@ for (this_aim in all_aims) { # HAI alone
 	data_new <- data_new[!check,]
 	# data_new <- apply(data_new, 2, prep, scale="uv") # scale the data, with unit variance
 	if(this_aim=="aim2"){
-		write_csv(as_tibble(data_new), "../results/logistic_reg/training_hai_only_data_aim3.csv")
-		writeLines(as.character(as.numeric(data_multiplex_test$infection)), "../results/logistic_reg/response_aim3.txt")
+		write_csv(as_tibble(data_new), paste0(out_path, "training_hai_only_data_aim3.csv"))
+		writeLines(as.character(as.numeric(data_multiplex_test$infection)), paste0(out_path, "response_aim3.txt"))
 	}
 
 	probabilities <- model %>% predict(as_tibble(data_new), type = "response")
 	test_new <- (probabilities>0.5) == data_multiplex_test$infection
 	mean(test_new)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_multiplex_test$infection)))
-	writeLines(tmp, paste0("../results/logistic_reg/logistic_prediction_", this_model, ".txt"))
+	writeLines(tmp, paste0(out_path, "logistic_prediction_", this_model, ".txt"))
 }
 
-# A feature selected model
+# A feature selected model using stepAIC
 ## variable selected model 1
 for (this_aim in "aim2") { # antibody alone
 	# this_aim="aim2"
@@ -313,8 +297,8 @@ for (this_aim in "aim2") { # antibody alone
 	test_self <- (probabilities>0.5) == data_combined$response
 	mean(test_self)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_combined$response==1)))
-	writeLines(tmp, paste0("../results/logistic_reg/logistic_accuracy_", this_model, ".txt"))
-	write_csv(df_imp, paste0("../results/logistic_reg/logistic_imp_", this_model, ".csv"))
+	writeLines(tmp, paste0(out_path, "logistic_accuracy_", this_model, ".txt"))
+	write_csv(df_imp, paste0(out_path, "logistic_imp_", this_model, ".csv"))
 
 	data_new <- data_multiplex_test %>% dplyr::select(-group,-sample,-timepoint,-infection) %>% mutate_all(as.numeric)
 	check <- apply(data_new, 1, function(x){any(is.na(x))})
@@ -325,7 +309,7 @@ for (this_aim in "aim2") { # antibody alone
 	test_new <- (probabilities>0.5) == data_multiplex_test$infection
 	mean(test_new)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_multiplex_test$infection)))
-	writeLines(tmp, paste0("../results/logistic_reg/logistic_prediction_", this_model, ".txt"))
+	writeLines(tmp, paste0(out_path, "logistic_prediction_", this_model, ".txt"))
 }
 
 ## variable selected model 3
@@ -380,8 +364,8 @@ for (this_aim in "aim2") { # antibody + HAI
 	test_self <- (probabilities>0.5) == data_combined$response
 	mean(test_self)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_combined$response==1)))
-	writeLines(tmp, paste0("../results/logistic_reg/logistic_accuracy_", this_model, ".txt"))
-	write_csv(df_imp, paste0("../results/logistic_reg/logistic_imp_", this_model, ".csv"))
+	writeLines(tmp, paste0(out_path, "logistic_accuracy_", this_model, ".txt"))
+	write_csv(df_imp, paste0(out_path, "logistic_imp_", this_model, ".csv"))
 
 	data_new <- data_multiplex_test %>% dplyr::select(-group,-sample,-timepoint,-infection) %>% mutate_all(as.numeric)
 	check <- apply(data_new, 1, function(x){any(is.na(x))})
@@ -393,19 +377,19 @@ for (this_aim in "aim2") { # antibody + HAI
 	test_new <- (probabilities>0.5) == data_multiplex_test$infection
 	mean(test_new)
 	tmp <- capture.output(confusionMatrix(data=factor(probabilities>0.5), factor(data_multiplex_test$infection)))
-	writeLines(tmp, paste0("../results/logistic_reg/logistic_prediction_", this_model, ".txt"))
+	writeLines(tmp, paste0(out_path, "logistic_prediction_", this_model, ".txt"))
 
 }
 
 # plot importance
-files_all <- list.files("../results/logistic_reg/", "_imp_", full.names=T)
+files_all <- list.files(out_path, "_imp_", full.names=T)
 df_imps <- lapply(files_all, function(x){
 	tmp <- read_csv(x)
 	tmp$file <- x
 	tmp
 })
 df_imps <- bind_rows(df_imps)
-df_imps$model <- gsub("../results/logistic_reg//logistic_imp_", "", df_imps$file, fixed=T)
+df_imps$model <- gsub(".+/logistic_imp_", "", df_imps$file)
 df_imps$model <- gsub(".csv", "", df_imps$model, fixed=T)
 df_imps$model <- gsub("_", " ", df_imps$model, fixed=T)
 df_imps$positive_correlation <- ifelse(df_imps$coefficients>0, "positive", "negative")
@@ -422,9 +406,8 @@ for(this_model in unique(df_imps$model)){
 	# p <- ggplot(df_tmp, aes(y=variable))+ geom_col(aes(x=importance, fill=positive_correlation), color="black") + shadowtext::geom_shadowtext(aes(x=importance+0.1, label=p_value_text), bg.color="white", color="black", bg.r=0.1, just="left", size=2) +scale_fill_manual("Correlation", values=c("red","blue")) + xlim(c(0, 1.3)) + ggtitle(this_model) + xlab("Importance")+ylab("Variables")+theme_minimal()+theme(legend.position="bottom")
 	p <- ggplot(df_tmp, aes(y=variable))+ geom_col(aes(x=importance), fill="grey", color="black") + shadowtext::geom_shadowtext(aes(x=importance+0.1, label=p_value_text), bg.color="white", color="black", bg.r=0.1, just="left", size=3) + xlim(c(0, 1.3)) + ggtitle(this_model) + xlab("Importance")+ylab("Variables")+theme_minimal()+theme(legend.position="bottom")
 	plots <- c(plots, list(p))
-	ggsave(plot=p, paste0("../results/logistic_reg/plot_importance_top10_", this_model, ".pdf"), width=5, height=7)
+	ggsave(plot=p, paste0(out_path, "plot_importance_top10_", this_model, ".pdf"), width=5, height=7, device = cairo_pdf)
 }
 
-files_all
 p_out <- plots[[2]] + plots[[1]] + plots[[5]] + plots[[4]] + plots[[7]] + plot_spacer() + plot_layout(ncol=2, height=c(8,8,2), guides='collect') &  theme(legend.position='bottom')
-ggsave(plot=p_out, paste0("../results/logistic_reg/fig7abcde.pdf"), width=8, height=8)
+ggsave(plot=p_out, paste0(out_path, "fig7abcde.pdf"), width=8, height=8, device = cairo_pdf)

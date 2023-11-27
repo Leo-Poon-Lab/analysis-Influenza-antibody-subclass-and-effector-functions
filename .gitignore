@@ -3,3 +3,5 @@ results/*
 data/*
 *.pptx
 .DS_Store
+reviewers_comments.md
+revision/*

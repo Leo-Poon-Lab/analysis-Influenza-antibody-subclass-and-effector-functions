@@ -15,56 +15,35 @@ library(ggallin)
 # library(boot)
 
 # read data
-source("./helper/deal_with_colnams.R")
+source(here::here("scripts/helper/deal_with_colnams.R"))
+source(here::here("scripts/helper/prepare_multiplex_data.R"))
+data_all <- prepare_data()
+data_multiplex_aim2 <- data_all[[1]]
+data_clinical_aim2 <- data_all[[2]]
+data_multiplex_aim3 <- data_all[[3]]
+data_clinical_aim3 <- data_all[[4]]
 
-data_multiplex_aim2 <- read_excel("../data/PCA_data.xlsx", sheet="Aim 2 multiplex data")
-data_multiplex_aim2 <- deal_with_colnames(data_multiplex_aim2)
-unique(sapply(strsplit(names(data_multiplex_aim2), " "), function(x){x[3]}))
-data_multiplex_aim2$timepoint <- 2
-
-data_multiplex_aim3 <- read_excel("../data/PCA_data.xlsx", sheet="Aim 3 multiplex data")
-data_multiplex_aim3 <- deal_with_colnames(data_multiplex_aim3)
-unique(sapply(strsplit(names(data_multiplex_aim3), " "), function(x){paste(x[-c(1,2)], collapse = " ")}))
-names(data_multiplex_aim3) <- gsub("H3N2/Victoria/2011", "H3-2011", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("Malaysia/2004", "HA-20041", names(data_multiplex_aim3), fixed=T)
-
-split_tmp <- strsplit(data_multiplex_aim3$sample, "d", fixed=T)
-data_multiplex_aim3$sample <- sapply(split_tmp, function(x){x[1]})
-data_multiplex_aim3$sample <- gsub(" ", "", data_multiplex_aim3$sample, fixed=T)
-data_multiplex_aim3$group <- gsub(" ", "", data_multiplex_aim3$group, fixed=T)
-data_multiplex_aim3$timepoint <- sapply(split_tmp, function(x){as.numeric(x[2])})
-data_multiplex_aim3$timepoint[data_multiplex_aim3$group=="V0S0"] <- 2
-
-data_clinical_aim2 <- read_excel("../data/PCA_data.xlsx", sheet="Aim 2 clinical data")
-data_clinical_aim2$sample <- as.character(data_clinical_aim2$sample)
-stopifnot(all(data_multiplex_aim2$sample %in% data_clinical_aim2$sample))
-data_clinical_aim3 <- read_excel("../data/PCA_data.xlsx", sheet="Aim 3 clinical data")
-data_clinical_aim3$sample <- as.character(data_clinical_aim3$sample)
-stopifnot(all(data_multiplex_aim3$sample %in% data_clinical_aim3$sample))
-
-names(data_multiplex_aim2) <- gsub("pdm H1F-2009", "H1-stem", names(data_multiplex_aim2), fixed=T)
-names(data_multiplex_aim2) <- gsub("seas. H3F", "H3-stem", names(data_multiplex_aim2), fixed=T)
-names(data_multiplex_aim2) <- gsub("seas. H1-2007", "vaxx. H1-2007", names(data_multiplex_aim2), fixed=T)
-
-names(data_multiplex_aim3) <- gsub("pdm H1F-2009", "H1-stem", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("seas. H3F", "H3-stem", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("seas. H1-2007", "vaxx. H1-2007", names(data_multiplex_aim3), fixed=T)
+# convert the column names to be the same between aim2 and aim3 data in this analysis
+names(data_multiplex_aim2) <- gsub(" sH1", " vaxx sH1-2007", names(data_multiplex_aim2), fixed=T)
+names(data_multiplex_aim2) <- gsub(" pH1", " pH1-2009", names(data_multiplex_aim2), fixed=T)
+names(data_multiplex_aim2) <- gsub(" H3-2007", " sH3-2007", names(data_multiplex_aim2), fixed=T)
 
 # build model for aim2 and aim3
 all_aims <- c("aim2", "aim3")
 data_multiplex_aim3 <- data_multiplex_aim3 %>% filter(timepoint==2) # keep only the d2 data for comparison between the aim2 and aim3 data
-
 dir_rst <- "elastic_net_plsda_results"
 
 for (this_aim in all_aims) { # antibody + HAI
+	# this_aim="aim2"
 	# this_aim="aim3"
+
 	if(this_aim=="aim2"){
-		data_multiplex <- left_join(data_multiplex_aim2, data_clinical_aim2 %>% dplyr::select(sample, contains("pre infection HAI")))
-		data_multiplex_test <- left_join(data_multiplex_aim3, data_clinical_aim3 %>% dplyr::select(sample, contains("pre infection HAI")))
+		data_multiplex <- left_join(data_multiplex_aim2, data_clinical_aim2 %>% dplyr::select(sample, contains("pre infection HAI")) %>% mutate_all(as.character))
+		data_multiplex_test <- left_join(data_multiplex_aim3, data_clinical_aim3 %>% dplyr::select(sample, contains("pre infection HAI")) %>% mutate_all(as.character))
 		this_model <- "model_3_en_plsda"
 	} else {
-		data_multiplex <- left_join(data_multiplex_aim3, data_clinical_aim3 %>% dplyr::select(sample, contains("pre infection HAI")))
-		data_multiplex_test <- left_join(data_multiplex_aim2, data_clinical_aim2 %>% dplyr::select(sample, contains("pre infection HAI")))
+		data_multiplex <- left_join(data_multiplex_aim3, data_clinical_aim3 %>% dplyr::select(sample, contains("pre infection HAI")) %>% mutate_all(as.character))
+		data_multiplex_test <- left_join(data_multiplex_aim2, data_clinical_aim2 %>% dplyr::select(sample, contains("pre infection HAI")) %>% mutate_all(as.character))
 		this_model <- "model_4_en_plsda"
 	}
 	names(data_multiplex) <- gsub(" ", "_", names(data_multiplex))
@@ -73,7 +52,7 @@ for (this_aim in all_aims) { # antibody + HAI
 	data_multiplex$infection <- grepl("S1", data_multiplex$group, fixed=T)
 	data_multiplex_test$infection <- grepl("S1", data_multiplex_test$group, fixed=T)
 
-	cur_path <- paste0("../results/", dir_rst, "/", this_aim, "/", this_model, "/")
+	cur_path <- paste0(here::here("results/"), dir_rst, "/", this_aim, "/", this_model, "/")
 	dir.create(cur_path, showWarnings=F, recursive=T)
 	# sort(names(data_multiplex))
 	# sort(names(data_multiplex_test))
@@ -93,7 +72,7 @@ for (this_aim in all_aims) { # antibody + HAI
 	data_m[data_m<0] <- 0
 	data_m <- log10(data_m+1) # log transformation
 	data_m <- apply(data_m, 2, pcaMethods::prep, scale="uv") # scale the data, with unit variance
-	data_m <- cbind(data_m, data_multiplex %>% dplyr::select(contains("pre_infection_HAI")))
+	data_m <- cbind(data_m, data_multiplex %>% dplyr::select(contains("pre_infection_HAI")) %>% mutate_all(as.numeric))
 
 	data_combined <- bind_cols(data_m,response=as.numeric(data_multiplex$infection))
 	sampling_factor <- 0.8
@@ -101,7 +80,7 @@ for (this_aim in all_aims) { # antibody + HAI
 	n_obs <- nrow(data_combined)
 	set.seed(2023)
 
-	variable_counts <- lapply(seq_len(n_repeats), function(i) {
+	variable_counts <- mclapply(seq_len(n_repeats), function(i) {
 		print(i)
 		idx_choosen <- sample(n_obs, round(n_obs*sampling_factor), replace=FALSE)
 		Y <- data_multiplex$infection[idx_choosen]
@@ -114,14 +93,14 @@ for (this_aim in all_aims) { # antibody + HAI
 		out <- coef(enet_mdl,s=enet.cv$lambda.min)
 		out <- as.matrix(out)[,1]
 		names(out)[out!=0]
-	})
+	}, mc.cores=4)
 	
 	count_data <- sort(table(unlist(variable_counts)), decreasing=T)
 	count_data <- count_data[-which(names(count_data)=="(Intercept)")] # remove intercerpt
 	out_file <- paste0(cur_path, "ranking_from_elastic_net_prediction.xlsx")
 	write_xlsx(tibble(varibale=names(count_data), times=count_data), out_file)
 	
-	## a sequential step-forward algorithm that itera- tively added a single feature into the PLSR (numerical outcome) or PLSDA (categorical outcome) model starting with the feature that had the highest fre- quency of selection, to the lowest frequency of selection. 
+	## a sequential step-forward algorithm that iteratively added a single feature into the PLSR (numerical outcome) or PLSDA (categorical outcome) model starting with the feature that had the highest frequency of selection, to the lowest frequency of selection. 
 	summary_all_models <- lapply(seq_len(length(count_data)), function (j){
 		# j=5
 		variables <- names(count_data)[seq(j)]
@@ -129,7 +108,7 @@ for (this_aim in all_aims) { # antibody + HAI
 	
 		data_train <- data_combined %>% dplyr::select(all_of(variables))
 		set.seed(2023)
-		model <- plsda(x=data_train, c=factor(data_combined$response, levels=c(0,1), labels=c("non-infection", "infection")), cv=10)
+		model <- mdatools::plsda(x=data_train, c=factor(data_combined$response, levels=c(0,1), labels=c("non-infection", "infection")), cv=10)
 		tmp <- capture.output(summary(model))
 		idx <- grep("(infection)", tmp, fixed=T)
 		tmp <- tmp[(idx+2):(idx+3)]
@@ -158,10 +137,10 @@ for (this_aim in all_aims) { # antibody + HAI
 	data_test <- data_multiplex_test %>% dplyr::select(all_of(variables)) %>% mutate_all(as.numeric)
 
 	set.seed(2023)
-	model <- plsda(x=data_train, c=factor(data_combined$response, levels=c(0,1), labels=c("non-infection", "infection")), cv=10)
+	model <- mdatools::plsda(x=data_train, c=factor(data_combined$response, levels=c(0,1), labels=c("non-infection", "infection")), cv=10)
 	summary(model)
 	# plotXScores(model)
-	plotPredictions(model)
+	# plotPredictions(model)
 	# out_file <- paste0(cur_path, "plot_fitting.pdf")
 	# ggsave(out_file, width=6, height=6)
 

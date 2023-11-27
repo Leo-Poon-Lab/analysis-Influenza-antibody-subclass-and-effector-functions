@@ -12,7 +12,7 @@ library(ggplot2)
 library(ggtext)
 
 # read data
-files_input <- list.files("../data/data_split/", full.names = T)
+files_input <- list.files(here::here("data/data_split/"), full.names = T)
 
 df_response <- lapply(files_input, function(x){
 	antibody <- gsub(".+/", "", x)
@@ -24,15 +24,16 @@ df_response <- lapply(files_input, function(x){
 
 df_response <- bind_rows(df_response)
 df_response <- df_response %>% filter(!is.na(sample))
+df_response <- df_response %>% select(-"Tetanus (11)") %>% select(-"anti-IgG-Fab Ab (44)")
 
 antibodys <- unique(df_response$antibody)
-(antigens <- names(df_response)[5:25])
+(antigens <- names(df_response)[5:23])
 
 samples <- unique(df_response$sample)
 types <- sapply(samples, function(x){
-	if(grepl("d1$", x)){return("d1")}
-	if(grepl("d2$", x)){return("d2")}
-	if(grepl("d3$", x)){return("d3")} else {return(NA)}
+	if(grepl("d1$", x)){return("day 0")}
+	if(grepl("d2$", x)){return("day 30")}
+	if(grepl("d3$", x)){return("1 year")} else {return(NA)}
 })
 df_response$sample_type <- sapply(df_response$sample, function(x){
 	types[names(types)==x]
@@ -41,21 +42,33 @@ df_response$sample_type <- sapply(df_response$sample, function(x){
 df_response_long <- df_response %>% pivot_longer(all_of(antigens), names_to="antigen", values_to="response")
 df_response_long <- df_response_long %>% select(-Type, -Well)
 
+# log transformation
+do_log_transfromation <- TRUE
+if(do_log_transfromation){
+df_response_long$response[df_response_long$response<0] <- 0
+df_response_long$response <- log10(df_response_long$response+1)
+# scaled within antibody group
+# df_response_long <- df_response_long %>% group_by(antibody) %>% mutate(response=scale(response))
+# scaled within protein group
+unique(df_response_long$antigen)
+df_response_long <- df_response_long %>% group_by(antigen) %>% mutate(response=scale(response))
+# df_response_long$response <- pcaMethods::prep(df_response_long$response, scale= "uv")
+}
+
 df_response_long$group_full <- paste0(df_response_long$group, " - ", df_response_long$sample_type)
 df_response_long$group_full <- gsub(" - NA", "", df_response_long$group_full)
 groups_all <- unique(df_response_long$group_full)
 
-df_response_long <- df_response_long %>% group_by(antibody, antigen) %>% mutate(neg_average_response=mean(response[group_full=="V0 S1 - d2"]))
-df_response_long$diff <- (df_response_long$response - df_response_long$neg_average_response)/df_response_long$neg_average_response
-
-df_response_long %>% filter(antibody=="IgG3") %>% filter(group=="V0 S0") %>% filter(antigen=="H1 A/Brisbane/59/2007 (38)")
-
-table(df_response_long$diff[df_response_long$group=="V0 S0"]>0.2)
-
-# df_response_long <- df_response_long %>% group_by(antibody, antigen) %>% mutate(neg_diff_95_percentile=quantile(diff[group=="V0 S0"], seq(0,1,0.01))[96])
-# df_response_long$Response_type <- ifelse(df_response_long$diff<=df_response_long$neg_diff_95_percentile, "negative", "positive")
-df_response_long$Response_type <- ifelse(df_response_long$diff<0.2, "negative", "positive") # we manually choose the 20% threshold
-table(df_response_long$Response_type)
+if(do_log_transfromation){
+  df_response_long <- df_response_long %>% group_by(antibody, antigen) %>% mutate(neg_average_response=mean(response[group_full=="V0 S1 - day 30"]))
+  df_response_long$diff <- (df_response_long$response - df_response_long$neg_average_response)
+  df_response_long$Response_type <- ifelse(df_response_long$diff<log(1.2), "negative", "positive") # we manually choose the 20% threshold
+} else {
+  df_response_long <- df_response_long %>% group_by(antibody, antigen) %>% mutate(neg_average_response=mean(response[group_full=="V0 S1 - day 30"]))
+  df_response_long$diff <- (df_response_long$response - df_response_long$neg_average_response)/df_response_long$neg_average_response
+  df_response_long$Response_type <- ifelse(df_response_long$diff<0.2, "negative", "positive") # we manually choose the 20% threshold
+}
+# table(df_response_long$Response_type)
 
 df_response_long <- df_response_long %>% ungroup()
 
@@ -135,7 +148,7 @@ df_boot_rst_all <- lapply(c(antibodys, "combined"), function(antibody_i){
 	colnames(df_boot_rst) <- c("group", "e_mean_res", "e_mean_pos_res", "e_hs", "e_hpi", "sd_mean_res", "sd_mean_pos_res", "sd_hs", "sd_hpi", "ci_mean_res_low", "ci_mean_res_high", "ci_mean_pos_res_low", "ci_mean_pos_res_high", "ci_hs_low", "ci_hs_high", "ci_hpi_low", "ci_hpi_high")
 	df_boot_rst <- as_tibble(df_boot_rst)
 	df_boot_rst$antibody <- antibody_i
-	write_tsv(df_boot_rst, paste0("../results/df_boot_rst_full_", antibody_i, ".tsv"))
+	write_tsv(df_boot_rst, paste0(here::here("results/df_boot_rst_full_"), antibody_i, ".tsv"))
 	df_boot_rst
 })
 
@@ -146,7 +159,7 @@ df_boot_rst <- bind_rows(df_boot_rst_all)
 df_boot_rst <- df_boot_rst %>% mutate_at(vars(-group, -antibody), as.numeric)
 df_boot_rst$group_sim <- gsub(" - .+$", "", df_boot_rst$group)
 df_boot_rst$d_sim <- gsub("V. S. - ", "", df_boot_rst$group)
-df_boot_rst$d_sim[df_boot_rst$d_sim=="V0 S0"] <- "d1"
+df_boot_rst$d_sim[df_boot_rst$d_sim=="V0 S0"] <- "day 0"
 # colors_t <- scico(length(unique(df_boot_rst$group)), palette = 'batlow')
 
 colors_t <- c("black", "red", "blue", "grey40")[factor(df_boot_rst$group_sim)]
@@ -154,11 +167,11 @@ names(colors_t) <- df_boot_rst$group_sim
 colors_t <- colors_t[order(names(colors_t))]
 colors_t <- colors_t[!duplicated(colors_t)]
 
-shape_t <- c(1,16,15)[factor(df_boot_rst$d_sim)]
-df_boot_rst$type_sim <- c("d1 = Pre vaccination", "d2 = Post vaccination/pre infection", "d3 = Post infection")[factor(df_boot_rst$d_sim)]
-names(shape_t) <- df_boot_rst$type_sim
-shape_t <- shape_t[order(names(shape_t))]
-shape_t <- shape_t[!duplicated(shape_t)]
+timepoints <- c("day 0 = Pre vaccination", "day 30 = Post vaccination/pre infection", "1 year = Post infection")
+df_boot_rst$d_sim <- factor(df_boot_rst$d_sim, levels=c("day 0", "day 30", "1 year"))
+df_boot_rst$type_sim <- timepoints[df_boot_rst$d_sim]
+shape_t <- c(1,16,15)
+names(shape_t) <- timepoints
 
 # Two dimensional illustration of the "Response fitness"
 sort(unique(df_boot_rst$antibody))
@@ -172,8 +185,9 @@ plot_2d <- function(df, x_var, y_var, color_var, shape_var, annt_var) {
 	# color_var = "group_sim"
 	# shape_var = "type_sim"
 	# annt_var = "group"
-	x_lab <- ifelse(grepl("pos", x_var), "Average difference (positive responses)", "Average difference")
-	y_lab <- ifelse(grepl("hs", y_var), "Shannon entropy", expression("HA cross-reactivity ("~pi~")"))
+  x_lab <- ifelse(grepl("pos", x_var), "Average difference (positive responses)", "Average difference")
+	
+  y_lab <- ifelse(grepl("hs", y_var), "Shannon entropy", expression("HA cross-reactivity ("~pi~")"))
 
 	x_e <- paste0("e_", x_var)
 	y_e <- paste0("e_", y_var)
@@ -182,13 +196,18 @@ plot_2d <- function(df, x_var, y_var, color_var, shape_var, annt_var) {
 	y_ci_l <- paste0("ci_", y_var, "_low")
 	y_ci_h <- paste0("ci_", y_var, "_high")
 	
+  if(do_log_transfromation){
+    df[[x_e]] <- sapply(df[[x_e]], function(x){10^x-1})
+    df[[x_ci_l]] <- sapply(df[[x_ci_l]], function(x){10^x-1})
+    df[[x_ci_h]] <- sapply(df[[x_ci_h]], function(x){10^x-1})
+  } 
 	ggplot(df)+
 		geom_segment(aes_string(x=x_e, xend=x_e, y=y_ci_l, yend=y_ci_h, color=color_var), alpha=0.6, size=0.5)+
 		geom_segment(aes_string(x=x_ci_l, xend=x_ci_h, y=y_e, yend=y_e, color=color_var), alpha=0.6, size=0.5)+
 		# geom_point(aes_string(x=x_e, y=y_e, color=color_var), alpha=0.8, shape=1, size=2, data=. %>% filter(open_circle))+
 		# geom_point(aes_string(x=x_e, y=y_e, color=color_var, fill=color_var), alpha=0.8, shape=16, size=2, data=. %>% filter(!open_circle), show.legend=FALSE)+
-		geom_point(aes_string(x=x_e, y=y_e, color=color_var, fill=color_var, shape=shape_var), alpha=0.8, size=2, )+
-		geom_text_repel(aes_string(x=x_e, y=y_e, color=color_var, label=annt_var), alpha=0.9, bg.color = "white", bg.r = 0.05, size=2, segment.size=0.3, segment.alpha=0.9, segment.color="black", arrow = arrow(length = unit(0.01, "npc")), point.padding=0.28, box.padding=0.45, show.legend=FALSE, max.overlaps = Inf, force=0.1)+
+		geom_point(aes_string(x=x_e, y=y_e, color=color_var, fill=color_var, shape=shape_var), alpha=0.8, size=2)+
+		geom_text_repel(aes_string(x=x_e, y=y_e, color=color_var, label=annt_var), alpha=0.9, bg.color = "white", bg.r = 0.05, size=2, segment.size=0.3, segment.alpha=0.9, segment.color="black", arrow = arrow(length = unit(0.01, "npc")), point.padding=0.28, box.padding=0.45, show.legend=FALSE, max.overlaps = Inf, force=0.5)+
 		# scale_fill_manual(name="Group", values=colors_t)+
 		scale_color_manual(name="Group", values=colors_t)+
 		scale_shape_manual(name="Timepoint", values=shape_t)+
@@ -212,7 +231,7 @@ p0 <- plot_2d(df = df_boot_rst_for_plot,
 	shape_var = "type_sim",
 	annt_var = "group"
 	)
-ggsave("../results/2D_pos_res_hpi.pdf", width=8, height=8)
+ggsave(here::here("results/2D_pos_res_hpi.pdf"), width=8, height=8, plot=p0)
 
 p1 <- plot_2d(df = df_boot_rst_for_plot,
 	x_var = "mean_res",
@@ -221,7 +240,7 @@ p1 <- plot_2d(df = df_boot_rst_for_plot,
 	shape_var = "type_sim",
 	annt_var = "group"
 	)
-ggsave("../results/2D_pos_res_hs.pdf", width=8, height=8)
+ggsave(here::here("results/2D_pos_res_hs.pdf"), width=8, height=8)
 
 
 

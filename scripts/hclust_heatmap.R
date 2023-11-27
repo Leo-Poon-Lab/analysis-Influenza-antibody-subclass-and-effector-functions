@@ -9,51 +9,13 @@ library(FactoMineR)
 library("factoextra")
 
 # read data
-source("./helper/deal_with_colnams.R")
-
-data_multiplex_aim2 <- read_excel("../data/PCA_data.xlsx", sheet="Aim 2 multiplex data")
-data_multiplex_aim2 <- deal_with_colnames(data_multiplex_aim2)
-unique(sapply(strsplit(names(data_multiplex_aim2), " "), function(x){x[3]}))
-data_multiplex_aim2$timepoint <- 2
-names(data_multiplex_aim2) <- gsub("seas. H5", "av. H5", names(data_multiplex_aim2), fixed=T)
-names(data_multiplex_aim2) <- gsub("seas. H7", "av. H7", names(data_multiplex_aim2), fixed=T)
-names(data_multiplex_aim2) <- gsub("seas. H9", "av. H9", names(data_multiplex_aim2), fixed=T)
-names(data_multiplex_aim2) <- gsub("av. HA", "av.", names(data_multiplex_aim2), fixed=T)
-names(data_multiplex_aim2) <- gsub("H1F-2009", "H1-stem", names(data_multiplex_aim2), fixed=T)
-names(data_multiplex_aim2) <- gsub("Bris", "vaxx", names(data_multiplex_aim2), fixed=T)
-sort(names(data_multiplex_aim2))
-
-data_multiplex_aim3 <- read_excel("../data/PCA_data.xlsx", sheet="Aim 3 multiplex data")
-data_multiplex_aim3 <- deal_with_colnames(data_multiplex_aim3)
-unique(sapply(strsplit(names(data_multiplex_aim3), " "), function(x){paste(x[-c(1,2)], collapse = " ")}))
-names(data_multiplex_aim3) <- gsub("H3N2/Victoria/2011", "H3-2011", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("Malaysia/2004", "HA-2004", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("seas. H5", "av. H5", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("seas. H7", "av. H7", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("seas. H9", "av. H9", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("av. HA", "av.", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("pdm H1F-2009", "H1-stem", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("seas. H3F-1968", "H3-stem", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("seas. HA H5N1-2004", "av. H5-2004", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("HA H3", "seas. H3", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("seas. B HA-2004", "seas. BVic-2004", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("seas. B Bris HA-2008", "seas. BVic-2008", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("Bris H1-2007", "vaxx H1-2007", names(data_multiplex_aim3), fixed=T)
-names(data_multiplex_aim3) <- gsub("Bris H3-2007", "seas. H3-2007", names(data_multiplex_aim3), fixed=T)
-
-sort(names(data_multiplex_aim3))
-
-split_tmp <- strsplit(data_multiplex_aim3$sample, "d", fixed=T)
-data_multiplex_aim3$sample <- sapply(split_tmp, function(x){x[1]})
-data_multiplex_aim3$sample <- gsub(" ", "", data_multiplex_aim3$sample, fixed=T)
-data_multiplex_aim3$group <- gsub(" ", "", data_multiplex_aim3$group, fixed=T)
-data_multiplex_aim3$timepoint <- sapply(split_tmp, function(x){as.numeric(x[2])})
-data_multiplex_aim3$timepoint[data_multiplex_aim3$group=="V0S0"] <- 2
-
-data_clinical_aim2 <- read_excel("../data/PCA_data.xlsx", sheet="Aim 2 clinical data")
-stopifnot(all(data_multiplex_aim2$sample %in% data_clinical_aim2$sample))
-data_clinical_aim3 <- read_excel("../data/PCA_data.xlsx", sheet="Aim 3 clinical data")
-stopifnot(all(data_multiplex_aim3$sample %in% data_clinical_aim3$sample))
+source(here::here("scripts/helper/deal_with_colnams.R"))
+source(here::here("scripts/helper/prepare_multiplex_data.R"))
+data_all <- prepare_data()
+data_multiplex_aim2 <- data_all[[1]]
+data_clinical_aim2 <- data_all[[2]]
+data_multiplex_aim3 <- data_all[[3]]
+data_clinical_aim3 <- data_all[[4]]
 
 all_aims <- c("aim2", "aim3")
 all_plots <- c()
@@ -62,7 +24,7 @@ all_plots_names <- c()
 dir_rst <- "hclust_results"
 
 for (this_aim in all_aims) { # hclust for log-transformed and scaled responses
-	# this_aim=all_aims[2]
+	# this_aim=all_aims[1]
 	if(this_aim=="aim2"){
 		data_multiplex <- data_multiplex_aim2
 		data_clinical <- data_clinical_aim2
@@ -87,7 +49,7 @@ for (this_aim in all_aims) { # hclust for log-transformed and scaled responses
 		for (this_timepoint in uniq_timepoints){
 			# this_timepoint=uniq_timepoints[1]
 			# this_timepoint <- this_timepoint[[1]]
-			cur_path <- paste0("../results/", dir_rst, "/", this_aim, "/", paste0(this_group, collapse = "-"), "/timepoint_", paste0(this_timepoint, collapse = "-"), "/")
+			cur_path <- paste0(here::here("results/"), dir_rst, "/", this_aim, "/", paste0(this_group, collapse = "-"), "/timepoint_", paste0(this_timepoint, collapse = "-"), "/")
 			dir.create(cur_path, showWarnings=F, recursive=T)
 			print(cur_path)
 

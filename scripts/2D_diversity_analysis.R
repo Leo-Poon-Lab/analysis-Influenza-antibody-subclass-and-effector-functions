@@ -13,6 +13,7 @@ library(ggtext)
 
 # read data
 files_input <- list.files(here::here("data/data_split/"), full.names = T)
+files_input <- files_input[!grepl("~$", files_input, fixed=T)]
 
 df_response <- lapply(files_input, function(x){
 	antibody <- gsub(".+/", "", x)
@@ -24,10 +25,10 @@ df_response <- lapply(files_input, function(x){
 
 df_response <- bind_rows(df_response)
 df_response <- df_response %>% filter(!is.na(sample))
-df_response <- df_response %>% select(-"Tetanus (11)") %>% select(-"anti-IgG-Fab Ab (44)")
+df_response <- df_response %>% select(-"Tetanus (11)") %>% select(-"anti-IgG-Fab Ab (44)") %>% select(-"HA B/Brisbane/2008 (30)")
 
 antibodys <- unique(df_response$antibody)
-(antigens <- names(df_response)[5:23])
+(antigens <- names(df_response)[5:22])
 
 samples <- unique(df_response$sample)
 types <- sapply(samples, function(x){

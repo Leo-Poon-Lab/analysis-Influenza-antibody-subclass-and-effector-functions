@@ -37,6 +37,7 @@ deal_with_colnames <- function(tibble_i){
 	if(any(grepl("anti-igg-fab", colnames_i))){idx_torm <- c(idx_torm, grep("anti-igg-fab", colnames_i))}
 	if(any(grepl("tetanus", colnames_i))){idx_torm <- c(idx_torm, grep("tetanus", colnames_i))}
 	if(any(grepl("b/hk/330/2001", colnames_i))){idx_torm <- c(idx_torm, grep("b/hk/330/2001", colnames_i))}
+	if(any(grepl("b/brisbane/2008", colnames_i))){idx_torm <- c(idx_torm, grep("b/brisbane/2008", colnames_i))}
 	if(sum(idx_torm>0)>0){
 		tibble_i <- tibble_i[,-idx_torm[idx_torm!=0]]
 		renamed_t <- renamed_t[-idx_torm[idx_torm!=0]]

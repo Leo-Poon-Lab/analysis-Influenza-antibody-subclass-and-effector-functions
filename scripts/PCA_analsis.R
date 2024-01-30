@@ -219,7 +219,7 @@ for (this_aim in all_aims) { # PCA for raw responses
 			all_plots_names <- c(all_plots_names, file_out)
 			ggsave(file_out, width = 8, height = 6)
 			(df_ks_test_2d_agegroup <- ks_test_2d(data_meta_reorder, "Age_group", res.pca))
-			if(!is.na(df_ks_test_2d_agegroup)){write_csv(df_ks_test_2d_agegroup, paste0(cur_path, "individuals_plot_by_age_2d_test.csv"))}
+			if(all(!is.na(unlist(df_ks_test_2d_agegroup)))){write_csv(df_ks_test_2d_agegroup, paste0(cur_path, "individuals_plot_by_age_2d_test.csv"))}
 			# wilcox_test_d1(data_meta, "Age_group", res.pca)
 
 			## Plots for combined data
@@ -231,7 +231,7 @@ for (this_aim in all_aims) { # PCA for raw responses
 				all_plots_names <- c(all_plots_names, file_out)
 				ggsave(file_out, width = 8, height = 6)
 				(df_ks_test_2d_group <- ks_test_2d(data_meta_reorder, "group", res.pca))
-				if(!is.na(df_ks_test_2d_group)){write_csv(df_ks_test_2d_group, paste0(cur_path, "individuals_plot_by_group_2d_test.csv"))}
+				if(all(!is.na(unlist(df_ks_test_2d_group)))){write_csv(df_ks_test_2d_group, paste0(cur_path, "individuals_plot_by_group_2d_test.csv"))}
 			}
 			
 			### if timepoint more than one, for aim3 v1s1 group
@@ -243,13 +243,11 @@ for (this_aim in all_aims) { # PCA for raw responses
 				all_plots_names <- c(all_plots_names, file_out)
 				ggsave(file_out, width = 8, height = 6)
 				(df_ks_test_2d_timepoint <- ks_test_2d(data_meta_reorder, "timepoint", res.pca))
-				if(!is.na(df_ks_test_2d_timepoint)){write_csv(df_ks_test_2d_timepoint, paste0(cur_path, "individuals_plot_by_timepoint_2d_test.csv"))}
+				if(all(!is.na(unlist(df_ks_test_2d_timepoint)))){write_csv(df_ks_test_2d_timepoint, paste0(cur_path, "individuals_plot_by_timepoint_2d_test.csv"))}
 			}
 
 			########### PCA #####################################
 
 		}
-
 	}
-	
 }

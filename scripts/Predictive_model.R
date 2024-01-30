@@ -18,6 +18,46 @@ data_clinical_aim2 <- data_all[[2]]
 data_multiplex_aim3 <- data_all[[3]]
 data_clinical_aim3 <- data_all[[4]]
 
+elastic_net_ranking_aim2 <- readxl::read_excel(here::here("results/elastic_net_plsda_results/aim2/model_3_en_plsda/ranking_from_elastic_net_prediction.xlsx"))
+elastic_net_ranking_aim3 <- readxl::read_excel(here::here("results/elastic_net_plsda_results/aim3/model_4_en_plsda/ranking_from_elastic_net_prediction.xlsx"))
+
+get_shared_top_N_variables <- function(data_1, data_2, N=10){
+  # data_1 = elastic_net_ranking_aim2
+  # data_2 = elastic_net_ranking_aim3
+  # N = 10
+  stopifnot(all(data_1[[1]] %in% data_2[[1]]))
+
+  # we choose the top 10 shared variables between two models by comparing ranked variables from both models' lists. Each list contains 24 variables. In each round (we do it sequentially from rank 1 to rank 24), I will compare the same-ranked variables from both lists. If they match, the variable is selected. If not, the variables are added to a waiting list. In subsequent rounds, new variables are compared to each other and those in the waiting list. Once a match is found, the variable is selected. This process continues until 10 variables are selected.
+  waiting_list <- c()
+  selected_list <- c()
+  for (i in 1:24){
+    if (length(selected_list)<N){
+      if (data_1[[1]][i]==data_2[[1]][i]){
+        selected_list <- c(selected_list, data_1[[1]][i])
+      } else {
+        if (data_1[[1]][i] %in% waiting_list){
+          selected_list <- c(selected_list, data_1[[1]][i])
+          waiting_list <- waiting_list[!waiting_list %in% data_1[[1]][i]]
+        } else if (data_2[[1]][i] %in% waiting_list){
+          selected_list <- c(selected_list, data_2[[1]][i])
+          waiting_list <- waiting_list[!waiting_list %in% data_2[[1]][i]]
+        } else {
+          waiting_list <- c(waiting_list, data_1[[1]][i], data_2[[1]][i])
+        }
+      }
+    } else {
+      break()
+    }
+  }
+  selected_list
+}
+
+selected_shared_variables_15 <- get_shared_top_N_variables(elastic_net_ranking_aim2, elastic_net_ranking_aim3, N=15)
+selected_shared_variables_15 <- gsub("`", "", selected_shared_variables_15)
+selected_shared_variables <- selected_shared_variables_15[1:10]
+writeLines(selected_shared_variables, here::here("results/logistic_reg/top10_selected_shared_variables.txt"))
+selected_shared_variables_non_HAI <- selected_shared_variables_15[!grepl("pre_infection_HAI", selected_shared_variables_15)][1:10]
+
 data_multiplex_aim2 <- data_multiplex_aim2 %>% mutate_at(vars(!one_of("group", "sample")), as.numeric)
 data_multiplex_aim3 <- data_multiplex_aim3 %>% mutate_at(vars(!one_of("group", "sample")), as.numeric)
 data_clinical_aim2$sample <- as.character(data_clinical_aim2$sample)
@@ -72,13 +112,17 @@ for (this_aim in all_aims) { # antibody alone
 	data_m <- log10(data_m+1) # log transformation
 	data_m <- apply(data_m, 2, prep, scale="uv") # scale the data, with unit variance
 
+  data_m <- as_tibble(data_m)
+  stopifnot(all(selected_shared_variables_non_HAI %in% names(as_tibble(data_m))))
+  data_m <- data_m %>% dplyr::select(all_of(selected_shared_variables_non_HAI))
+
 	if(this_aim=="aim2"){
-		write_csv(as_tibble(data_m), here::here("results/logistic_reg/training_data_aim2.csv"))
+		write_csv(data_m, here::here("results/logistic_reg/training_data_aim2.csv"))
 		writeLines(as.character(as.numeric(data_multiplex$infection)), paste0(out_path, "response_aim2.txt"))
 	}
 
 	data_combined <- bind_cols(data_m,response=as.numeric(data_multiplex$infection))
-	data_combined$response
+
 	model <- glm(response~., data=data_combined, family="binomial")
 	# summary(model)
 	df_imp <- varImp(model)/max(varImp(model))
@@ -96,7 +140,7 @@ for (this_aim in all_aims) { # antibody alone
 	check <- apply(data_new, 1, function(x){any(is.na(x))})
 	data_multiplex_test <- data_multiplex_test[!check,]
 	data_new <- data_new[!check,]
-
+  data_new <- data_new %>% dplyr::select(all_of(selected_shared_variables_non_HAI))
 
 	probabilities <- model %>% predict(as_tibble(data_new), type = "response")
 	test_new <- (probabilities>0.5) == data_multiplex_test$infection
@@ -144,6 +188,10 @@ for (this_aim in all_aims) { # antibody + HAI
 	data_m <- apply(data_m, 2, prep, scale="uv") # scale the data, with unit variance
 	data_m <- cbind(data_m, data_multiplex %>% dplyr::select(contains("pre_infection_HAI")))
 
+  data_m <- as_tibble(data_m)
+  stopifnot(all(selected_shared_variables %in% names(as_tibble(data_m))))
+  data_m <- data_m %>% dplyr::select(all_of(selected_shared_variables))
+
 	data_combined <- bind_cols(data_m,response=as.numeric(data_multiplex$infection))
 	model <- glm(response~., data=data_combined, family="binomial")
 	# summary(model)
@@ -162,6 +210,8 @@ for (this_aim in all_aims) { # antibody + HAI
 	check <- apply(data_new, 1, function(x){any(is.na(x))})
 	data_multiplex_test <- data_multiplex_test[!check,]
 	data_new <- data_new[!check,]
+  data_new <- data_new %>% dplyr::select(all_of(selected_shared_variables))
+
 	# data_new <- apply(data_new, 2, prep, scale="uv") # scale the data, with unit variance
 	if(this_aim=="aim2"){
 		write_csv(as_tibble(data_new), paste0(out_path, "training_data_hai_antibody_aim3.csv"))
@@ -285,6 +335,10 @@ for (this_aim in "aim2") { # antibody alone
 	data_m <- log10(data_m+1) # log transformation
 	data_m <- apply(data_m, 2, prep, scale="uv") # scale the data, with unit variance
 
+  data_m <- as_tibble(data_m)
+  stopifnot(all(selected_shared_variables_non_HAI %in% names(as_tibble(data_m))))
+  data_m <- data_m %>% dplyr::select(all_of(selected_shared_variables_non_HAI))
+
 	data_combined <- bind_cols(data_m,response=as.numeric(data_multiplex$infection))
 	model_full <- glm(response~., data=data_combined, family="binomial")
 	model <- model_full %>% stepAIC(trace = FALSE)
@@ -304,6 +358,7 @@ for (this_aim in "aim2") { # antibody alone
 	check <- apply(data_new, 1, function(x){any(is.na(x))})
 	data_multiplex_test <- data_multiplex_test[!check,]
 	data_new <- data_new[!check,]
+  data_new <- data_new %>% dplyr::select(all_of(selected_shared_variables_non_HAI))
 	
 	probabilities <- model %>% predict(as_tibble(data_new), type = "response")
 	test_new <- (probabilities>0.5) == data_multiplex_test$infection
@@ -351,6 +406,10 @@ for (this_aim in "aim2") { # antibody + HAI
 	data_m <- apply(data_m, 2, prep, scale="uv") # scale the data, with unit variance
 	data_m <- cbind(data_m, data_multiplex %>% dplyr::select(contains("pre_infection_HAI")))
 
+  data_m <- as_tibble(data_m)
+  stopifnot(all(selected_shared_variables %in% names(as_tibble(data_m))))
+  data_m <- data_m %>% dplyr::select(all_of(selected_shared_variables))
+
 	data_combined <- bind_cols(data_m,response=as.numeric(data_multiplex$infection))	
 	model_full <- glm(response~., data=data_combined, family="binomial")
 	model <- model_full %>% stepAIC(trace = FALSE)
@@ -371,6 +430,7 @@ for (this_aim in "aim2") { # antibody + HAI
 	check <- apply(data_new, 1, function(x){any(is.na(x))})
 	data_multiplex_test <- data_multiplex_test[!check,]
 	data_new <- data_new[!check,]
+  data_new <- data_new %>% dplyr::select(all_of(selected_shared_variables))
 	# data_new <- apply(data_new, 2, prep, scale="uv") # scale the data, with unit variance
 	
 	probabilities <- model %>% predict(as_tibble(data_new), type = "response")
